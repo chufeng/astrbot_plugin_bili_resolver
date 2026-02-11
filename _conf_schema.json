@@ -1,0 +1,27 @@
+{
+  "enable_auto_parse": {
+    "description": "自动解析 B 站链接（关闭后不再自动识别聊天中的链接）",
+    "type": "bool",
+    "default": true
+  },
+  "enable_search": {
+    "description": "启用 /搜视频 指令",
+    "type": "bool",
+    "default": true
+  },
+  "enable_image": {
+    "description": "回复中显示封面/图片",
+    "type": "bool",
+    "default": true
+  },
+  "group_whitelist_mode": {
+    "description": "群组白名单模式（开启后仅列表中的群生效，关闭则为黑名单模式——列表中的群不生效）",
+    "type": "bool",
+    "default": false
+  },
+  "group_list": {
+    "description": "群组 ID 列表（配合上方模式使用，填写群号，每行一个）",
+    "type": "list",
+    "default": []
+  }
+}
