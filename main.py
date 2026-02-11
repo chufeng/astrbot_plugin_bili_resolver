@@ -226,9 +226,11 @@ class BilibiliAnalysis(Star):
                 msg = await bili_keyword(group_id, text, session=session)
         except Exception as e:
             logger.error(f"Bilibili 解析出错: {e}")
+            event.stop_event()
             return
 
         if not msg:
+            event.stop_event()
             return
 
         if isinstance(msg, str):
@@ -240,7 +242,7 @@ class BilibiliAnalysis(Star):
         chain = _format_msg(msg)
         if chain:
             yield event.chain_result(chain)
-            event.stop_event()
+        event.stop_event()
 
     @filter.command("搜视频")
     async def search_video(self, event: AstrMessageEvent):
@@ -261,6 +263,7 @@ class BilibiliAnalysis(Star):
 
         if not text:
             yield event.plain_result("请输入搜索关键词，例如：/搜视频 猫咪")
+            event.stop_event()
             return
 
         try:
@@ -268,16 +271,19 @@ class BilibiliAnalysis(Star):
                 search_url = await search_bili_by_title(text, session=session)
                 if not search_url:
                     yield event.plain_result("未找到相关视频")
+                    event.stop_event()
                     return
 
                 msg = await bili_keyword(group_id, search_url, session=session)
         except Exception as e:
             logger.error(f"Bilibili 搜索出错: {e}")
             yield event.plain_result("搜索出错，请稍后再试")
+            event.stop_event()
             return
 
         if not msg:
             yield event.plain_result("解析失败")
+            event.stop_event()
             return
 
         if isinstance(msg, str):
@@ -289,7 +295,7 @@ class BilibiliAnalysis(Star):
         chain = _format_msg(msg)
         if chain:
             yield event.chain_result(chain)
-            event.stop_event()
+        event.stop_event()
 
     async def terminate(self):
         """插件被卸载/停用时调用"""
