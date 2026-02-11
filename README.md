@@ -8,11 +8,14 @@ AstrBot 插件 —— 自动解析群聊/私聊中的 B 站链接，返回视频
 
 ```
 https://www.bilibili.com/video/av114556558967080?p=1
+
 标题："终于知道为什么听到某些歌，反派会愣住了。因为...这也是他们的童年啊..."
 小标题：TG-2025-05-23-175551094
 类型：XX | UP：一罐蠢乃酱 | https://space.bilibili.com/3546772907493433
+
 播放：359.35万 | 弹幕：2350 | 收藏：12.97万
 点赞：28.47万 | 硬币：4.07万 | 评论：2422
+
 简介：-
 ```
 
@@ -38,7 +41,9 @@ https://www.bilibili.com/video/av114556558967080?p=1
 
 ## 安装
 
-将 `astrbot_plugin_bilibili_analysis` 目录放入 AstrBot 的 `data/plugins/` 目录下，重启或热重载即可。
+**推荐**：在 AstrBot WebUI 的插件管理页面，搜索 `astrbot_plugin_bili_resolver` 一键安装。
+
+手动安装：将插件目录放入 AstrBot 的 `data/plugins/` 目录下，重启或热重载即可。
 
 ## 配置
 
