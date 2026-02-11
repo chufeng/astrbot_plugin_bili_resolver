@@ -38,9 +38,16 @@ def encWbi(params: dict, img_key: str, sub_key: str):
     return params
 
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://www.bilibili.com",
+}
+
+
 async def getWbiKeys():
     "获取最新的 img_key 和 sub_key"
-    async with ClientSession() as session:
+    async with ClientSession(headers=HEADERS) as session:
         async with session.get("https://api.bilibili.com/x/web-interface/nav") as resp:
             json_content = await resp.json()
     img_url: str = json_content["data"]["wbi_img"]["img_url"]
