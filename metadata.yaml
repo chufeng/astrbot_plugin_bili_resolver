@@ -1,6 +1,6 @@
 name: astrbot_plugin_bili_resolver
 author: chufeng
-description: Bilibili 链接自动解析插件，支持视频、番剧、直播、文章、动态的自动解析和视频搜索
+description: Bilibili的小组件最麻烦了，电脑打不开，于是做了个可以直接转成原链接和展示播放和介绍的工具
 version: 1.0.1
 repo: https://github.com/chufeng/astrbot_plugin_bili_resolver
 display_name: Bilibili 解析

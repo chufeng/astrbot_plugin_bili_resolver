@@ -149,7 +149,7 @@ def _format_msg(msg_list: List[Union[List[str], str]]) -> list:
 @register(
     "astrbot_plugin_bili_resolver",
     "chufeng",
-    "Bilibili 链接自动解析插件，支持视频、番剧、直播、文章、动态的自动解析和搜索",
+    "Bilibili的小组件最麻烦了，电脑打不开，于是做了个可以直接转成原链接和展示播放和介绍的工具",
     "1.0.1",
     "https://github.com/chufeng/astrbot_plugin_bili_resolver",
 )
