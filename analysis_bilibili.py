@@ -148,15 +148,23 @@ async def search_bili_by_title(title: str, session: ClientSession) -> str:
     async with session.get(search_url) as resp:
         result = await resp.json()
 
-    if result["code"] == -412:
-        logger.warning(f"analysis_bilibili: {result}")
-        return
+    code = result.get("code", -1)
+    if code != 0:
+        logger.warning(f"analysis_bilibili search error: code={code}, {result.get('message', '')}")
+        return None
 
-    for i in result["data"]["result"]:
+    data = result.get("data")
+    if not data or not isinstance(data.get("result"), list):
+        logger.warning(f"analysis_bilibili search: 返回数据无 result 字段")
+        return None
+
+    for i in data["result"]:
         if i.get("result_type") != "video":
             continue
-        # 只返回第一个结果
-        return i["data"][0].get("arcurl")
+        items = i.get("data") or i.get("result")
+        if items and len(items) > 0:
+            return items[0].get("arcurl")
+    return None
 
 
 # 处理超过一万的数字
