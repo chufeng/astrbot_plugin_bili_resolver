@@ -218,6 +218,9 @@ class BilibiliAnalysis(Star):
         elif not text or not BILI_PATTERN.search(text):
             return
 
+        # 确认是 bilibili 链接，立即阻断 LLM 处理
+        event.stop_event()
+
         try:
             async with ClientSession(trust_env=self.trust_env, headers=HEADERS) as session:
                 if re.search(r"(b23\.tv)|(bili(22|23|33|2233)\.cn)", text, re.I):
@@ -226,17 +229,14 @@ class BilibiliAnalysis(Star):
                 msg = await bili_keyword(group_id, text, session=session)
         except Exception as e:
             logger.error(f"Bilibili 解析出错: {e}")
-            event.stop_event()
             return
 
         if not msg:
-            event.stop_event()
             return
 
         if isinstance(msg, str):
             if msg:
                 yield event.plain_result(msg)
-            event.stop_event()
             return
 
         chain = _format_msg(msg)
@@ -247,6 +247,8 @@ class BilibiliAnalysis(Star):
     @filter.command("搜视频")
     async def search_video(self, event: AstrMessageEvent):
         """通过关键词搜索 Bilibili 视频"""
+        event.stop_event()
+
         if not self.enable_search:
             return
 
@@ -263,7 +265,6 @@ class BilibiliAnalysis(Star):
 
         if not text:
             yield event.plain_result("请输入搜索关键词，例如：/搜视频 猫咪")
-            event.stop_event()
             return
 
         try:
@@ -271,31 +272,26 @@ class BilibiliAnalysis(Star):
                 search_url = await search_bili_by_title(text, session=session)
                 if not search_url:
                     yield event.plain_result("未找到相关视频")
-                    event.stop_event()
                     return
 
                 msg = await bili_keyword(group_id, search_url, session=session)
         except Exception as e:
             logger.error(f"Bilibili 搜索出错: {e}")
             yield event.plain_result("搜索出错，请稍后再试")
-            event.stop_event()
             return
 
         if not msg:
             yield event.plain_result("解析失败")
-            event.stop_event()
             return
 
         if isinstance(msg, str):
             if msg:
                 yield event.plain_result(msg)
-            event.stop_event()
             return
 
         chain = _format_msg(msg)
         if chain:
             yield event.chain_result(chain)
-        event.stop_event()
 
     async def terminate(self):
         """插件被卸载/停用时调用"""
