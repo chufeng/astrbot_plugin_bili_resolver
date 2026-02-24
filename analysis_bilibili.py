@@ -91,11 +91,11 @@ async def b23_extract(text: str, session: ClientSession) -> str:
         return text
 
     url = f"https://{b23[0]}"
-    async with session.get(url) as resp:
-        if resp.status != 200:
-            logger.warning(f"b23_extract: HTTP {resp.status} for {url}")
-            return text
-        return str(resp.url)
+    async with session.get(url, allow_redirects=False) as resp:
+        if resp.status in (301, 302, 303, 307, 308):
+            return resp.headers.get("Location", text)
+        # 没有重定向则尝试跟随
+        return str(resp.url) if resp.status == 200 else text
 
 
 def extract(text: str) -> Tuple[str, Optional[str], Optional[str]]:
