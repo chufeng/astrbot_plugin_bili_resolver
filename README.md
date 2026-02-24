@@ -1,4 +1,17 @@
+<div align="center">
+
+![:name](https://count.getloli.com/@astrbot_plugin_bili_resolver?name=astrbot_plugin_bili_resolver&theme=minecraft&padding=6&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)
+
 # astrbot_plugin_bili_resolver
+
+_✨ bilibili小组件等转链的工具 ✨_
+
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![AstrBot](https://img.shields.io/badge/AstrBot-4.0%2B-orange.svg)](https://github.com/Soulter/AstrBot)
+[![GitHub](https://img.shields.io/badge/作者-chufeng-blue)](https://github.com/chufeng)
+
+</div>
 
 AstrBot 插件 —— 自动解析群聊/私聊中的 B 站链接，返回视频信息摘要。
 
