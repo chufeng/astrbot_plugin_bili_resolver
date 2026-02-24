@@ -1,8 +1,11 @@
 import re
 import json
-from typing import List, Union
+import urllib.parse
+from pathlib import PurePosixPath
+from typing import List, Optional, Set, Union
 
-from aiohttp import ClientSession
+import aiohttp
+from aiohttp import ClientSession, ClientTimeout
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
@@ -16,14 +19,47 @@ HEADERS = {
     "(KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.69"
 }
 
+DEFAULT_TIMEOUT = ClientTimeout(total=15)
+
 BILI_PATTERN = re.compile(
     r"(b23\.tv)|(bili(22|23|33|2233)\.cn)|(\.bilibili\.com)"
-    r"|(^(av|cv)(\d+))|(^BV([a-zA-Z0-9]{10})+)"
-    r"|(\[\[QQ小程序\]哔哩哔哩\])|(QQ小程序&amp;#93;哔哩哔哩)|(QQ小程序&#93;哔哩哔哩)",
+    r"|(\b(av|cv)(\d+))|\b(BV([a-zA-Z0-9]{10})+)"
+    r"|(\[\[QQ小程序\]哔哩哔哩\])|(QQ小程序&amp;#93;哔哩哔哩)"
+    r"|(QQ小程序&#93;哔哩哔哩)",
     re.I,
 )
 
-IMAGE_SUFFIXES = {".jpg", "jpeg", ".png", ".gif", ".bmp", "jfif", "webp"}
+IMAGE_SUFFIXES: Set[str] = {
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".jfif", ".webp",
+}
+
+# 允许的 bilibili 相关域名后缀
+_ALLOWED_DOMAINS = (
+    "bilibili.com",
+    "b23.tv",
+    "bilivideo.com",
+    "bilivideo.cn",
+    "bilivideo.net",
+    "hdslb.com",
+    "bili2233.cn",
+    "bili22.cn",
+    "bili23.cn",
+    "bili33.cn",
+)
+
+
+def _is_allowed_domain(url: str) -> bool:
+    """检查 URL 的域名是否在 bilibili 白名单内"""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname or ""
+        host = host.lower().rstrip(".")
+        return any(
+            host == domain or host.endswith("." + domain)
+            for domain in _ALLOWED_DOMAINS
+        )
+    except Exception:
+        return False
 
 
 def _find_qqdocurl(data: dict) -> str:
@@ -34,7 +70,7 @@ def _find_qqdocurl(data: dict) -> str:
     for _key, val in meta.items():
         if isinstance(val, dict):
             url = val.get("qqdocurl", "") or val.get("url", "")
-            if url and ("bilibili" in url or "b23.tv" in url or "bili" in url):
+            if url and _is_allowed_domain(url):
                 return url
     return ""
 
@@ -81,7 +117,6 @@ def _extract_from_raw_message(raw) -> str:
         for seg in raw:
             if not isinstance(seg, dict):
                 continue
-            # {"type": "json", "data": {"data": "{...json...}"}}
             if seg.get("type") == "json":
                 inner = seg.get("data", {})
                 if isinstance(inner, dict):
@@ -107,8 +142,14 @@ def _extract_from_raw_message(raw) -> str:
         cq_match = re.search(r'\[CQ:json,data=(.*?)\]', raw_str, re.S)
         if cq_match:
             cq_data = cq_match.group(1)
-            # CQ码中逗号等字符会被转义
-            cq_data = cq_data.replace("&#44;", ",").replace("&#91;", "[").replace("&#93;", "]").replace("&amp;", "&")
+            # CQ码中逗号等字符会被转义，&amp; 必须最先解码
+            cq_data = (
+                cq_data
+                .replace("&amp;", "&")
+                .replace("&#44;", ",")
+                .replace("&#91;", "[")
+                .replace("&#93;", "]")
+            )
             url = _try_parse_json(cq_data)
             if url:
                 return url
@@ -118,7 +159,14 @@ def _extract_from_raw_message(raw) -> str:
 
 def _is_image(msg: str) -> bool:
     """判断字符串是否为图片 URL"""
-    return isinstance(msg, str) and len(msg) > 4 and msg[-4:].lower() in IMAGE_SUFFIXES
+    if not isinstance(msg, str) or not msg:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(msg)
+        suffix = PurePosixPath(parsed.path).suffix.lower()
+        return suffix in IMAGE_SUFFIXES
+    except Exception:
+        return False
 
 
 def _flatten(container):
@@ -139,7 +187,12 @@ def _format_msg(msg_list: List[Union[List[str], str]]) -> list:
             continue
         elif _is_image(i):
             # 确保图片 URL 以 http 开头
-            url = i if i.startswith("http") else f"https:{i}"
+            if i.startswith("http"):
+                url = i
+            elif i.startswith("//"):
+                url = f"https:{i}"
+            else:
+                url = f"https://{i}"
             chain.append(Comp.Image.fromURL(url))
         else:
             chain.append(Comp.Plain(str(i)))
@@ -149,37 +202,49 @@ def _format_msg(msg_list: List[Union[List[str], str]]) -> list:
 @register(
     "astrbot_plugin_bili_resolver",
     "chufeng",
-    "Bilibili的小组件最麻烦了，电脑打不开，于是做了个可以直接转成原链接和展示播放和介绍的工具",
+    "Bilibili的小组件最麻烦了，电脑打不开，"
+    "于是做了个可以直接转成原链接和展示播放和介绍的工具",
     "1.0.1",
     "https://github.com/chufeng/astrbot_plugin_bili_resolver",
 )
 class BilibiliAnalysis(Star):
+
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config
         self.trust_env = False
+        self._session: Optional[ClientSession] = None
 
         # 功能开关
         self.enable_auto_parse = config.get("enable_auto_parse", True)
         self.enable_search = config.get("enable_search", True)
 
         # 图片开关，同步到 analysis_bilibili 模块
-        analysis_bilibili.analysis_display_image = config.get("enable_image", True)
+        analysis_bilibili.analysis_display_image = config.get(
+            "enable_image", True
+        )
 
         # 群组白名单/黑名单
         self.group_whitelist_mode = config.get("group_whitelist_mode", False)
         self.group_list = [str(g) for g in config.get("group_list", [])]
 
+    async def _get_session(self) -> ClientSession:
+        """懒初始化并复用 ClientSession"""
+        if self._session is None or self._session.closed:
+            self._session = ClientSession(
+                trust_env=self.trust_env,
+                headers=HEADERS,
+                timeout=DEFAULT_TIMEOUT,
+            )
+        return self._session
+
     def _check_group(self, group_id: str) -> bool:
         """检查群组是否允许使用。返回 True 表示允许。"""
         if not group_id or not self.group_list:
-            # 没有群号或列表为空，不做限制
             return True
         if self.group_whitelist_mode:
-            # 白名单模式：只有列表中的群才生效
             return group_id in self.group_list
         else:
-            # 黑名单模式：列表中的群不生效
             return group_id not in self.group_list
 
     @filter.event_message_type(filter.EventMessageType.ALL)
@@ -189,7 +254,9 @@ class BilibiliAnalysis(Star):
             return
 
         # 群组白名单/黑名单检查
-        group_id = event.message_obj.group_id if event.message_obj else None
+        group_id = (
+            event.message_obj.group_id if event.message_obj else None
+        )
         if not self._check_group(group_id):
             return
 
@@ -198,16 +265,19 @@ class BilibiliAnalysis(Star):
         # 尝试从 QQ小程序 JSON 卡片中提取 URL
         json_url = ""
         if event.message_obj:
-            # 从 raw_message 提取
-            json_url = _extract_from_raw_message(event.message_obj.raw_message)
-            # 从消息链各组件中查找
+            json_url = _extract_from_raw_message(
+                event.message_obj.raw_message
+            )
             if not json_url and event.message_obj.message:
                 for comp in event.message_obj.message:
-                    raw = getattr(comp, "raw", None) or getattr(comp, "data", None)
+                    raw = getattr(comp, "raw", None) or getattr(
+                        comp, "data", None
+                    )
                     if raw:
                         json_url = _extract_from_raw_message(raw)
                         if json_url:
                             break
+
         # message_str 本身可能就是 JSON
         if not json_url and text.startswith("{"):
             json_url = _try_parse_json(text)
@@ -218,21 +288,23 @@ class BilibiliAnalysis(Star):
         elif not text or not BILI_PATTERN.search(text):
             return
 
-        # 确认是 bilibili 链接，立即阻断 LLM 处理
-        event.stop_event()
-
         try:
-            async with ClientSession(trust_env=self.trust_env, headers=HEADERS) as session:
-                if re.search(r"(b23\.tv)|(bili(22|23|33|2233)\.cn)", text, re.I):
-                    text = await b23_extract(text, session=session)
+            session = await self._get_session()
+            if re.search(
+                r"(b23\.tv)|(bili(22|23|33|2233)\.cn)", text, re.I
+            ):
+                text = await b23_extract(text, session=session)
 
-                msg = await bili_keyword(group_id, text, session=session)
+            msg = await bili_keyword(group_id, text, session=session)
         except Exception as e:
-            logger.error(f"Bilibili 解析出错: {e}")
+            logger.error(f"Bilibili 解析出错: {e!r}", exc_info=True)
             return
 
         if not msg:
             return
+
+        # 只在有结果后才阻断
+        event.stop_event()
 
         if isinstance(msg, str):
             if msg:
@@ -242,17 +314,16 @@ class BilibiliAnalysis(Star):
         chain = _format_msg(msg)
         if chain:
             yield event.chain_result(chain)
-        event.stop_event()
 
     @filter.command("搜视频")
     async def search_video(self, event: AstrMessageEvent):
         """通过关键词搜索 Bilibili 视频"""
-        event.stop_event()
-
         if not self.enable_search:
             return
 
-        group_id = event.message_obj.group_id if event.message_obj else None
+        group_id = (
+            event.message_obj.group_id if event.message_obj else None
+        )
         if not self._check_group(group_id):
             return
 
@@ -267,16 +338,18 @@ class BilibiliAnalysis(Star):
             yield event.plain_result("请输入搜索关键词，例如：/搜视频 猫咪")
             return
 
-        try:
-            async with ClientSession(trust_env=self.trust_env, headers=HEADERS) as session:
-                search_url = await search_bili_by_title(text, session=session)
-                if not search_url:
-                    yield event.plain_result("未找到相关视频")
-                    return
+        event.stop_event()
 
-                msg = await bili_keyword(group_id, search_url, session=session)
+        try:
+            session = await self._get_session()
+            search_url = await search_bili_by_title(text, session=session)
+            if not search_url:
+                yield event.plain_result("未找到相关视频")
+                return
+
+            msg = await bili_keyword(group_id, search_url, session=session)
         except Exception as e:
-            logger.error(f"Bilibili 搜索出错: {e}")
+            logger.error(f"Bilibili 搜索出错: {e!r}", exc_info=True)
             yield event.plain_result("搜索出错，请稍后再试")
             return
 
@@ -294,5 +367,7 @@ class BilibiliAnalysis(Star):
             yield event.chain_result(chain)
 
     async def terminate(self):
-        """插件被卸载/停用时调用"""
-        pass
+        """插件被卸载/停用时调用，关闭持久化 session"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
