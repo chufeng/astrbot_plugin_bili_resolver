@@ -182,11 +182,14 @@ def _format_msg(msg_list: List[Union[List[str], str]]) -> list:
     """将消息列表转换为 AstrBot 消息链"""
     flatten_msg_list = list(_flatten(msg_list))
     chain = []
+    text_buffer = ""
     for i in flatten_msg_list:
         if not i:
             continue
-        elif _is_image(i):
-            # 确保图片 URL 以 http 开头
+        if _is_image(i):
+            if text_buffer:
+                chain.append(Comp.Plain(text_buffer))
+                text_buffer = ""
             if i.startswith("http"):
                 url = i
             elif i.startswith("//"):
@@ -195,16 +198,19 @@ def _format_msg(msg_list: List[Union[List[str], str]]) -> list:
                 url = f"https://{i}"
             chain.append(Comp.Image.fromURL(url))
         else:
-            chain.append(Comp.Plain(str(i)))
+            text_buffer += str(i)
+    if text_buffer:
+        chain.append(Comp.Plain(text_buffer))
     return chain
 
 
 @register(
     "astrbot_plugin_bili_resolver",
     "chufeng",
-    "Bilibili的小组件最麻烦了，电脑打不开，"
-    "于是做了个可以直接转成原链接和展示播放和介绍的工具",
-    "1.0.1",
+    "bilibili小组件等转链的工具,方便PC查看链接,"
+    "因为之前用其他的转链总是被踢下线,所以自己写了个简单版的,"
+    "从发布以来还没被踢下线",
+    "1.0.2",
     "https://github.com/chufeng/astrbot_plugin_bili_resolver",
 )
 class BilibiliAnalysis(Star):
