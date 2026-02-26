@@ -14,6 +14,16 @@ import astrbot.api.message_components as Comp
 from . import analysis_bilibili
 from .analysis_bilibili import b23_extract, bili_keyword, search_bili_by_title
 
+TEMPLATE_PRESET_EMOJI = (
+    "🎬 标题：${标题}\n"
+    "👤 UP主：${UP主}\n"
+    "📝 简介：${简介}\n"
+    "${封面}\n"
+    "👍 点赞：${点赞} 🪙 投币：${投币}\n"
+    "❤️ 收藏：${收藏} 🔄 转发：${转发}\n"
+    "👀 观看：${观看} 💬 弹幕：${弹幕数量}"
+)
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.69"
@@ -210,7 +220,7 @@ def _format_msg(msg_list: List[Union[List[str], str]]) -> list:
     "bilibili小组件等转链的工具,方便PC查看链接,"
     "因为之前用其他的转链总是被踢下线,所以自己写了个简单版的,"
     "从发布以来还没被踢下线",
-    "1.0.2",
+    "1.0.3",
     "https://github.com/chufeng/astrbot_plugin_bili_resolver",
 )
 class BilibiliAnalysis(Star):
@@ -229,6 +239,17 @@ class BilibiliAnalysis(Star):
         analysis_bilibili.analysis_display_image = config.get(
             "enable_image", True
         )
+
+        # 视频排版模板（根据预设选择）
+        preset = config.get("template_preset", "原始格式")
+        if preset == "原始格式":
+            analysis_bilibili.analysis_video_template = ""
+        elif preset == "简洁风格":
+            analysis_bilibili.analysis_video_template = TEMPLATE_PRESET_EMOJI
+        else:  # 自定义
+            analysis_bilibili.analysis_video_template = config.get(
+                "video_template", ""
+            )
 
         # 群组白名单/黑名单
         self.group_whitelist_mode = config.get("group_whitelist_mode", False)

@@ -33,6 +33,7 @@ analysis_display_image = True
 analysis_display_image_list = []
 images_size = ""
 cover_images_size = ""
+analysis_video_template = ""
 
 
 def resize_image(src: str, is_cover: bool = False) -> str:
@@ -213,6 +214,42 @@ def handle_num(num: int) -> str:
     return str(num)
 
 
+def _format_duration(seconds: int) -> str:
+    """将秒数格式化为 mm:ss 或 hh:mm:ss"""
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def _truncate_desc(desc: str, max_lines: int = 3) -> str:
+    """截断简介到最多 max_lines 行非空行"""
+    lines = [line for line in desc.split("\n") if line.strip()]
+    if len(lines) > max_lines:
+        return "\n".join(lines[:max_lines]) + "……"
+    return "\n".join(lines)
+
+
+def _apply_template(template: str, data: dict, cover_url: str) -> list:
+    """将模板中的变量替换为实际值，${封面} 拆分为独立的图片元素"""
+    result = template
+    for key, value in data.items():
+        result = result.replace(f"${{{key}}}", str(value))
+
+    if "${封面}" in result:
+        parts = result.split("${封面}")
+        msg_list = []
+        for i, part in enumerate(parts):
+            if part:
+                msg_list.append(part)
+            if i < len(parts) - 1 and cover_url:
+                msg_list.append(cover_url)
+        return msg_list
+    return [result]
+
+
 async def video_detail(
     url: str, session: ClientSession, **kwargs
 ) -> Tuple[List[str], str]:
@@ -249,6 +286,31 @@ async def video_detail(
         pubdate = strftime(
             "%Y-%m-%d %H:%M:%S", localtime(res["pubdate"])
         )
+
+        if analysis_video_template:
+            clean_vurl = vurl.lstrip("\n")
+            data = {
+                "标题": res["title"],
+                "UP主": res["owner"]["name"],
+                "UP主链接": f"https://space.bilibili.com/{res['owner']['mid']}",
+                "简介": _truncate_desc(res["desc"]),
+                "点赞": handle_num(res["stat"]["like"]),
+                "投币": handle_num(res["stat"]["coin"]),
+                "收藏": handle_num(res["stat"]["favorite"]),
+                "转发": handle_num(res["stat"]["share"]),
+                "观看": handle_num(res["stat"]["view"]),
+                "弹幕数量": handle_num(res["stat"]["danmaku"]),
+                "评论": handle_num(res["stat"]["reply"]),
+                "链接": clean_vurl,
+                "发布时间": pubdate,
+                "类型": res["tname"],
+                "BV号": res.get("bvid", ""),
+                "时长": _format_duration(res.get("duration", 0)),
+                "版权": "原创" if res.get("copyright") == 1 else "转载",
+            }
+            msg = _apply_template(analysis_video_template, data, cover)
+            return msg, vurl
+
         tname = (
             f"类型：{res['tname']} | UP：{res['owner']['name']} "
             f"| https://space.bilibili.com/{res['owner']['mid']}\n"
