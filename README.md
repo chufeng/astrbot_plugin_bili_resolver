@@ -43,7 +43,6 @@ https://www.bilibili.com/video/av114556558967080?p=1
 | 短链 | `https://b23.tv/xxx` |
 | 视频 | `bilibili.com/video/av...` 或 `BV...` |
 | 番剧 | `bilibili.com/bangumi/play/ep...` / `ss...` / `md...` |
-| 直播间 | `live.bilibili.com/12345` |
 | 专栏文章 | `bilibili.com/read/cv...` |
 | 动态 | `bilibili.com/opus/...` 或 `t.bilibili.com/...` |
 | QQ 小程序卡片 | 分享 B 站内容到 QQ 的卡片消息 |
