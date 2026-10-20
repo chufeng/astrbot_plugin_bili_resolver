@@ -45,7 +45,7 @@ https://www.bilibili.com/video/av114556558967080?p=1
 | 番剧 | `bilibili.com/bangumi/play/ep...` / `ss...` / `md...` |
 | 专栏文章 | `bilibili.com/read/cv...` |
 | 动态 | `bilibili.com/opus/...` 或 `t.bilibili.com/...` |
-| QQ 小程序卡片 | 分享 B 站内容到 QQ 的卡片消息 |
+| QQ 小程序卡片 | 分享 B 站内容到 QQ 的卡片消息（OneBot / QQ 官方机器人 ark 卡片） |
 
 ## 指令
 
@@ -68,6 +68,7 @@ https://www.bilibili.com/video/av114556558967080?p=1
 | `enable_auto_parse` | bool | `true` | 自动解析开关 |
 | `enable_search` | bool | `true` | `/搜视频` 指令开关 |
 | `enable_image` | bool | `true` | 回复中是否显示封面图 |
+| `enable_card_title_search` | bool | `true` | 卡片消息没有直链时，用卡片标题搜索 B 站（仅在标题相似度 ≥0.85 时回复；QQ 官方机器人 ark 卡片兜底） |
 | `group_whitelist_mode` | bool | `false` | 白名单模式（开启=仅列表中的群生效，关闭=黑名单模式） |
 | `group_list` | list | `[]` | 群组 ID 列表 |
 | `template_preset` | string | `简洁风格` | 视频解析排版风格，见下方说明 |

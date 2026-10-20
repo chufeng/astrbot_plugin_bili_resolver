@@ -1,5 +1,7 @@
-import re
+import asyncio
+import difflib
 import json
+import re
 from collections import OrderedDict
 from time import localtime, strftime
 from typing import Dict, List, Optional, Tuple, Union
@@ -160,54 +162,133 @@ def extract(text: str) -> Tuple[str, Optional[str], Optional[str]]:
         return "", None, None
 
 
-async def search_bili_by_title(
-    title: str, session: ClientSession
-) -> Optional[str]:
-    # set headers
-    mainsite_url = "https://www.bilibili.com"
-    async with session.get(mainsite_url) as resp:
-        if resp.status != 200:
-            logger.warning(
-                f"search_bili_by_title: mainsite returned HTTP {resp.status}"
-            )
-            return None
+SEARCH_HEADERS = {
+    "Referer": "https://search.bilibili.com/",
+    "Origin": "https://search.bilibili.com",
+}
 
-    query = await get_query({"keyword": title}, session=session)
-    search_url = (
-        f"https://api.bilibili.com/x/web-interface/wbi/search/all/v2?{query}"
+# 标题清洗用：去掉关键字高亮标签、标点、书名号等，便于比较相似度
+_TITLE_TAG_PATTERN = re.compile(r"<[^>]+>")
+_TITLE_NOISE_PATTERN = re.compile(
+    r"[\s【】《》（）()\[\]{}「」『』\"'“”‘’!！?？,，.。:：;；、·~～\-_—|/\\]+"
+)
+_TITLE_PAREN_PATTERN = re.compile(r"[（(][^）)]*[）)]")
+
+
+def _normalize_title(text: str) -> str:
+    """去掉标点与高亮标签，用于计算标题相似度"""
+    cleaned = _TITLE_TAG_PATTERN.sub("", text or "")
+    return _TITLE_NOISE_PATTERN.sub("", cleaned).lower()
+
+
+def _search_keyword(title: str) -> str:
+    """把卡片标题清洗成更适合搜索的关键词（去掉括号补充说明与标点）"""
+    cleaned = _TITLE_PAREN_PATTERN.sub(
+        " ", _TITLE_TAG_PATTERN.sub("", title or "")
     )
+    cleaned = _TITLE_NOISE_PATTERN.sub(" ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()[:80]
 
-    async with session.get(search_url) as resp:
-        if resp.status != 200:
+
+async def _search_video_items(
+    keyword: str, session: ClientSession
+) -> Optional[List[dict]]:
+    """请求 B 站综合搜索，返回视频结果列表；失败或触发风控返回 None"""
+    if not keyword:
+        return None
+    for attempt in (1, 2):
+        try:
+            query = await get_query({"keyword": keyword}, session=session)
+            search_url = (
+                "https://api.bilibili.com/x/web-interface/wbi/search/all/v2?"
+                f"{query}"
+            )
+            async with session.get(
+                search_url, headers=SEARCH_HEADERS
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning(
+                        "analysis_bilibili search: HTTP "
+                        f"{resp.status} (attempt {attempt})"
+                    )
+                    return None
+                payload = await resp.json(content_type=None)
+        except Exception as e:
             logger.warning(
-                f"search_bili_by_title: search API returned HTTP {resp.status}"
+                "analysis_bilibili search: 请求失败 "
+                f"{e!r} (attempt {attempt})"
             )
             return None
-        result = await resp.json()
 
-    code = result.get("code", -1)
-    if code != 0:
+        data = payload.get("data") or {}
+        if payload.get("code") == 0 and isinstance(
+            data.get("result"), list
+        ):
+            for block in data["result"]:
+                if block.get("result_type") == "video":
+                    return block.get("data") or []
+            return []
+        # v_voucher 等风控返回没有 result 字段，稍后重试一次
         logger.warning(
-            f"analysis_bilibili search error: code={code}, "
-            f"{result.get('message', '')}"
+            "analysis_bilibili search: 第 "
+            f"{attempt} 次无结果 (code={payload.get('code')}, "
+            f"keys={list(data.keys())[:4]})"
         )
-        return None
-
-    data = result.get("data")
-    if not data or not isinstance(data.get("result"), list):
-        logger.warning("analysis_bilibili search: 返回数据无 result 字段")
-        return None
-
-    for i in data["result"]:
-        if i.get("result_type") != "video":
-            continue
-        items = i.get("data") or i.get("result")
-        if items and len(items) > 0:
-            return items[0].get("arcurl")
+        await asyncio.sleep(1.2)
     return None
 
 
-# 处理超过一万的数字
+async def search_bili_by_title(
+    title: str, session: ClientSession
+) -> Optional[str]:
+    """按关键词搜索并返回第一个视频链接（/搜视频 使用）"""
+    items = await _search_video_items(title, session)
+    if not items:
+        return None
+    return items[0].get("arcurl")
+
+
+async def search_bili_video_by_title(
+    title: str, session: ClientSession
+) -> Optional[str]:
+    """按卡片标题搜索，只有标题高度相似时才返回链接。
+
+    QQ 官方机器人下发的 B 站小程序卡片不携带链接（ark_data 里只有
+    title / preview / source），只能退回标题搜索。为了避免把无关视频
+    当成卡片内容，这里对搜索结果做相似度校验，匹配不上就返回 None。
+    """
+    keyword = _search_keyword(title)
+    raw_keyword = (title or "").strip()[:80]
+    items = await _search_video_items(keyword, session)
+    if not items and raw_keyword and raw_keyword != keyword:
+        # 清洗过度导致搜不到时，再用原始标题试一次
+        items = await _search_video_items(raw_keyword, session)
+    if not items:
+        return None
+
+    target = _normalize_title(title)
+    threshold = 0.85
+    best_ratio = 0.0
+    best_url = None
+    best_title = ""
+    for item in items:
+        candidate = _TITLE_TAG_PATTERN.sub("", item.get("title") or "")
+        ratio = difflib.SequenceMatcher(
+            None, target, _normalize_title(candidate)
+        ).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_url = item.get("arcurl")
+            best_title = candidate
+    if not best_url or best_ratio < threshold:
+        logger.info(
+            "analysis_bilibili search: 标题相似度不足"
+            f"({best_ratio:.2f})，跳过最佳候选：{best_title[:40]}"
+        )
+        return None
+    return best_url
+
+
 def handle_num(num: int) -> str:
     if num > 10000:
         return f"{num / 10000:.2f}万"
