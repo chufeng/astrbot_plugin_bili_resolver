@@ -32,11 +32,7 @@
   "template_preset": {
     "description": "视频解析排版风格",
     "type": "string",
-    "options": [
-      "原始格式",
-      "简洁风格",
-      "自定义"
-    ],
+    "options": ["原始格式", "简洁风格", "自定义"],
     "default": "原始格式",
     "hint": "原始格式：插件内置纯文字格式（默认）\n简洁风格：带 Emoji 的卡片格式\n自定义：使用下方文本框中的模板\n各风格具体样式请查阅 README"
   },

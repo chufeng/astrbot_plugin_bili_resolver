@@ -1,7 +1,7 @@
+import re
+import json
 import asyncio
 import difflib
-import json
-import re
 from collections import OrderedDict
 from time import localtime, strftime
 from typing import Dict, List, Optional, Tuple, Union
@@ -289,6 +289,7 @@ async def search_bili_video_by_title(
     return best_url
 
 
+# 处理超过一万的数字
 def handle_num(num: int) -> str:
     if num > 10000:
         return f"{num / 10000:.2f}万"

@@ -1,6 +1,6 @@
-import html
-import json
 import re
+import json
+import html
 import urllib.parse
 from pathlib import PurePosixPath
 from typing import Iterator, List, Optional, Set, Tuple, Union
@@ -129,18 +129,6 @@ def _is_content_domain(url: str) -> bool:
         host == domain or host.endswith("." + domain)
         for domain in _CONTENT_DOMAINS
     )
-
-
-def _is_image(msg: str) -> bool:
-    """判断字符串是否为图片 URL"""
-    if not isinstance(msg, str) or not msg:
-        return False
-    try:
-        parsed = urllib.parse.urlparse(msg)
-        suffix = PurePosixPath(parsed.path).suffix.lower()
-        return suffix in IMAGE_SUFFIXES
-    except Exception:
-        return False
 
 
 def _decode_text(text: str) -> str:
@@ -384,6 +372,18 @@ def _extract_from_raw_message(raw) -> str:
     return ""
 
 
+def _is_image(msg: str) -> bool:
+    """判断字符串是否为图片 URL"""
+    if not isinstance(msg, str) or not msg:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(msg)
+        suffix = PurePosixPath(parsed.path).suffix.lower()
+        return suffix in IMAGE_SUFFIXES
+    except Exception:
+        return False
+
+
 def _card_from_payload(payload) -> Tuple[bool, str]:
     """判断 payload 是否为 B 站卡片，并返回它的标题"""
     if not isinstance(payload, (dict, list, tuple)):
@@ -440,15 +440,21 @@ def _extract_card_title(raw, text: str = "") -> str:
 
 
 def _describe_raw(raw, limit: int = 2000) -> str:
-    """把 raw_message 序列化成便于排查的字符串（DEBUG 级别下使用）"""
+    """只序列化顶层字段名和 ark_data（DEBUG 级别下使用），不带用户/群信息"""
     payload = getattr(raw, "raw_data", None)
     if payload is None:
         payload = raw
+    keys = (
+        list(payload.keys())
+        if isinstance(payload, dict)
+        else type(payload).__name__
+    )
+    ark = _find_ark_data(payload)
     try:
-        description = json.dumps(payload, ensure_ascii=False, default=str)
+        description = json.dumps(ark, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
-        description = repr(payload)
-    return description[:limit]
+        description = repr(ark)
+    return f"keys={keys} ark_data={description[:limit]}"
 
 
 def _flatten(container):
@@ -587,10 +593,10 @@ class BilibiliAnalysis(Star):
         card_title = ""
         if not json_url:
             card_title = _extract_card_title(raw_message, text)
-            if "卡片消息" in text or "QQ小程序" in text:
-                # 卡片拿不到直链时输出原始 payload，方便排查不同卡片模板的字段
+            if card_title:
+                # 只记 B 站卡片的 ark_data，避免用户贴日志求助时泄露群/用户信息
                 logger.debug(
-                    f"未取到直链的卡片原始数据: {_describe_raw(raw_message)}"
+                    f"未取到直链的卡片: {_describe_raw(raw_message)}"
                 )
 
         if json_url:
