@@ -49,20 +49,6 @@ IMAGE_SUFFIXES: Set[str] = {
     ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".jfif", ".webp",
 }
 
-# 允许的 bilibili 相关域名后缀（包含 CDN，用于判断图片）
-_ALLOWED_DOMAINS = (
-    "bilibili.com",
-    "b23.tv",
-    "bilivideo.com",
-    "bilivideo.cn",
-    "bilivideo.net",
-    "hdslb.com",
-    "bili2233.cn",
-    "bili22.cn",
-    "bili23.cn",
-    "bili33.cn",
-)
-
 # 内容页域名后缀：只有这些域名下的链接才值得拿去解析
 _CONTENT_DOMAINS = (
     "bilibili.com",
@@ -90,6 +76,8 @@ ARK_TITLE_FIELDS = ("title", "desc", "summary", "prompt")
 
 # 用来判断一张卡片是否来自 B 站
 BILI_CARD_HINTS = ("哔哩哔哩", "bilibili", "b站", "b23")
+# 全卡片兜底扫描用：去掉 b23，避免图片哈希等字符串碰巧命中
+_BILI_CARD_HINTS_FALLBACK = ("哔哩哔哩", "bilibili", "b站")
 
 # 卡片消息里的标题摘要行，例如「摘要: [QQ小程序]【xxx】」
 _CARD_TITLE_PATTERN = re.compile(r"(?:摘要|标题)[:：]\s*(.+)")
@@ -103,19 +91,8 @@ _SHORT_LINK_PATTERN = re.compile(
 
 _CQ_JSON_PATTERN = re.compile(r"\[CQ:json,data=(.*?)\]", re.S)
 
-
-def _is_allowed_domain(url: str) -> bool:
-    """检查 URL 的域名是否在 bilibili 白名单内"""
-    try:
-        parsed = urllib.parse.urlparse(url)
-        host = parsed.hostname or ""
-        host = host.lower().rstrip(".")
-        return any(
-            host == domain or host.endswith("." + domain)
-            for domain in _ALLOWED_DOMAINS
-        )
-    except Exception:
-        return False
+# 发送人信息字段：群名片 / 昵称里可能带链接，兜底扫描时跳过
+_SENDER_KEYS = ("sender", "author", "member")
 
 
 def _is_content_domain(url: str) -> bool:
@@ -288,12 +265,13 @@ def _extract_from_payload(payload, depth: int = 0) -> str:
                     return url
 
         # 兜底：payload 里任意字符串携带的 B 站链接
-        for value in payload.values():
+        values = [v for k, v in payload.items() if k not in _SENDER_KEYS]
+        for value in values:
             if isinstance(value, str):
                 url = _bili_url_in_text(value)
                 if url:
                     return url
-        for value in payload.values():
+        for value in values:
             if isinstance(value, (dict, list, tuple)):
                 url = _extract_from_payload(value, depth + 1)
                 if url:
@@ -402,7 +380,7 @@ def _card_from_payload(payload) -> Tuple[bool, str]:
     hint_text = " ".join(str(item) for item in hints).lower()
     if not any(hint in hint_text for hint in BILI_CARD_HINTS):
         hint_text = " ".join(_walk_strings(ark)).lower()
-        if not any(hint in hint_text for hint in BILI_CARD_HINTS):
+        if not any(hint in hint_text for hint in _BILI_CARD_HINTS_FALLBACK):
             return False, ""
     for key in ARK_TITLE_FIELDS:
         value = fields.get(key)
