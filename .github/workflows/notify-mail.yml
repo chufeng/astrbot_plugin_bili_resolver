@@ -1,0 +1,76 @@
+name: 中文邮件提醒
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  # 用 _target 才能让 fork 来的 PR 也拿到 secrets；这里不 checkout 任何 PR 代码，所以是安全的
+  pull_request_target:
+    types: [opened]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify:
+    # 自己的操作不提醒，手动触发用来发测试邮件
+    if: github.actor != github.repository_owner || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 发送中文提醒邮件
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        # 事件内容从事件文件读，不用 ${{ }} 拼进脚本，防止标题里的恶意内容被当代码执行
+        shell: python
+        run: |
+          import json, os, smtplib
+          from email.header import Header
+          from email.mime.text import MIMEText
+
+          name = os.environ["GITHUB_EVENT_NAME"]
+          repo = os.environ["GITHUB_REPOSITORY"].split("/")[1]
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              ev = json.load(f)
+          who = ev.get("sender", {}).get("login", "")
+
+          if name == "issues":
+              item, what = ev["issue"], "提了新 issue"
+              url, body = item["html_url"], item.get("body")
+          elif name == "issue_comment":
+              item = ev["issue"]
+              what = "在 PR 下留言了" if "pull_request" in item else "在 issue 下留言了"
+              url, body = ev["comment"]["html_url"], ev["comment"].get("body")
+          elif name == "pull_request_target":
+              item, what = ev["pull_request"], "提了新 PR"
+              url, body = item["html_url"], item.get("body")
+          else:
+              item, what = {"title": "测试邮件"}, "手动触发了测试"
+              url, body = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}", "能收到这封，说明提醒配好了。"
+
+          subject = f"【GitHub 有人找你】{repo}：{who} {what}「{item['title']}」"
+          text = f"""仓库：{repo}
+          谁：{who}
+          干了啥：{what}
+          标题：{item['title']}
+          去回复：{url}
+
+          内容：
+          {body or '（没写内容）'}
+
+          ——
+          这是你自己在 GitHub Actions 里配的提醒，不是广告，也不是什么到期通知，记得去回人家。
+          """
+
+          user = os.environ["MAIL_USERNAME"]
+          to = [x.strip() for x in os.environ["MAIL_TO"].split(",") if x.strip()]
+          msg = MIMEText(text, "plain", "utf-8")
+          msg["Subject"] = Header(subject, "utf-8")
+          msg["From"] = user
+          msg["To"] = ", ".join(to)
+          with smtplib.SMTP_SSL("smtp.qq.com", 465) as s:
+              s.login(user, os.environ["MAIL_PASSWORD"])
+              s.send_message(msg)
+          print(f"已发送给 {len(to)} 个邮箱")
