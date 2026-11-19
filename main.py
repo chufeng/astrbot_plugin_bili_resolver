@@ -79,7 +79,11 @@ def _find_qqdocurl(data: dict) -> str:
         return ""
     for _key, val in meta.items():
         if isinstance(val, dict):
-            url = val.get("qqdocurl", "") or val.get("url", "")
+            url = (
+                val.get("qqdocurl", "")
+                or val.get("url", "")
+                or val.get("jumpUrl", "")
+            )
             if url and _is_allowed_domain(url):
                 return url
     return ""
