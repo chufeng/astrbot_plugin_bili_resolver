@@ -35,6 +35,20 @@ images_size = ""
 cover_images_size = ""
 analysis_video_template = ""
 
+VIDEO_REQUEST_HEADERS = (
+    {"User-Agent": "okhttp/4.9.3"},
+    {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Referer": "https://www.bilibili.com/",
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Referer": "https://www.bilibili.com/",
+    },
+)
+
 
 def resize_image(src: str, is_cover: bool = False) -> str:
     img_type = src[-3:]
@@ -254,12 +268,18 @@ async def video_detail(
     url: str, session: ClientSession, **kwargs
 ) -> Tuple[List[str], str]:
     try:
-        async with session.get(url) as resp:
-            if resp.status != 200:
-                return f"视频请求失败: HTTP {resp.status}", url
-            res = (await resp.json()).get("data")
-            if not res:
-                return "解析到视频被删了/稿件不可见或审核中/权限不足", url
+        for headers in VIDEO_REQUEST_HEADERS:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 412:
+                    continue
+                if resp.status != 200:
+                    return f"视频请求失败: HTTP {resp.status}", url
+                res = (await resp.json()).get("data")
+                if not res:
+                    return "解析到视频被删了/稿件不可见或审核中/权限不足", url
+                break
+        else:
+            return "视频请求失败: HTTP 412", url
         vurl = f"https://www.bilibili.com/video/av{res['aid']}"
         title = f"\n标题：{res['title']}\n"
 
