@@ -1,6 +1,21 @@
 name: astrbot_plugin_bili_resolver
+display_name: Bilibili 小程序原链解析
+short_desc: 自动解析 B站视频/番剧/直播/动态与 QQ 小程序卡片，转成原链接并展示播放数据
+desc: |
+  B 站小程序卡片在电脑上打不开，本插件把聊天里的 B 站链接和 QQ 小程序卡片转成原链接，并顺带展示标题、UP 主、播放/点赞/收藏等数据。
+  支持视频、番剧、直播、专栏、动态与 b23 短链，支持 /搜视频 指令、自定义排版模板、群黑白名单与各项功能开关。
+  主要目的是避免转链导致 QQ 被踢下线，从发布至今未出现踢下线情况。
 author: chufeng
-description: bilibili小组件等转链的工具,方便PC查看链接,因为之前用其他的转链总是被踢下线,所以自己写了个简单版的,从发布以来还没被踢下线
 version: 1.0.4
 repo: https://github.com/chufeng/astrbot_plugin_bili_resolver
-display_name: Bilibili 解析
+social_link: https://github.com/chufeng
+support_platforms:
+  - aiocqhttp
+  - qq_official
+tags:
+  - bilibili
+  - B站
+  - 视频解析
+  - 转链
+  - 小程序卡片
+  - 原链
