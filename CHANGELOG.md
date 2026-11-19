@@ -2,7 +2,7 @@
 
 ## v1.0.4
 
-- 修复 QQ 官方机器人（qq_official）下 B 站小程序 / ark 卡片无法识别的问题
+- 修复 QQ 官方机器人（qq_official）下 B 站小程序 / ark 卡片无法识别的问题（#5）
   - QQ 官方 API 的卡片消息正文只有「[卡片消息] 小程序 / 摘要 / source」摘要文本，
     链接可能在 `ark_data.fields` 里；插件现在会读取 AstrBot 消息对象
     `raw_message.raw_data` 中的 `ark_data`（以及 `msg_elements` 里的引用卡片）
@@ -13,6 +13,7 @@
 - 识别链接时排除封面 / CDN 图片地址，避免把 `i0.hdslb.com` 封面当成分享链接
 - 新增配置 `enable_card_title_search`：卡片没有直链时按标题搜索（默认开启）
 - 修复部分服务器上视频详情请求返回 HTTP 412 导致解析失败的问题（#7）
+- 支持 iPad 客户端分享卡片的 `jumpUrl` 字段（#8）
 
 ## v1.0.3
 

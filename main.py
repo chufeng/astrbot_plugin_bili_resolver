@@ -440,7 +440,7 @@ def _extract_card_title(raw, text: str = "") -> str:
 
 
 def _describe_raw(raw, limit: int = 2000) -> str:
-    """只序列化顶层字段名和 ark_data（DEBUG 级别下使用），不带用户/群信息"""
+    """只序列化顶层字段名和 ark_data（DEBUG 级别下使用）"""
     payload = getattr(raw, "raw_data", None)
     if payload is None:
         payload = raw
@@ -594,7 +594,7 @@ class BilibiliAnalysis(Star):
         if not json_url:
             card_title = _extract_card_title(raw_message, text)
             if card_title:
-                # 只记 B 站卡片的 ark_data，避免用户贴日志求助时泄露群/用户信息
+                # 卡片拿不到直链时输出 ark_data，方便排查不同卡片模板的字段
                 logger.debug(
                     f"未取到直链的卡片: {_describe_raw(raw_message)}"
                 )
