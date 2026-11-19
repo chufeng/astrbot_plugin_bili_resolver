@@ -233,7 +233,7 @@ def _find_qqdocurl(data: dict) -> str:
     for _key, val in meta.items():
         if not isinstance(val, dict):
             continue
-        for key in ("qqdocurl", "jump_url", "url"):
+        for key in ("qqdocurl", "jumpUrl", "jump_url", "url"):
             raw = val.get(key)
             if isinstance(raw, str):
                 url = _bili_url_in_text(raw)
